@@ -51,8 +51,15 @@
 	}
 
 	function setRows(table, rows) {
-		if (!Array.isArray(rows) || !table.tBodies[0] || rows.length !== table.tBodies[0].rows.length) return false;
-		Array.from(table.tBodies[0].rows).forEach((row, rowIndex) => {
+		if (!Array.isArray(rows) || !table.tBodies[0] || !table.tHead) return false;
+		const body = table.tBodies[0];
+		const columnCount = table.tHead.rows[0].cells.length;
+		while (body.rows.length > rows.length) body.deleteRow(-1);
+		while (body.rows.length < rows.length) {
+			const row = body.insertRow();
+			for (let columnIndex = 0; columnIndex < columnCount; columnIndex++) row.insertCell();
+		}
+		Array.from(body.rows).forEach((row, rowIndex) => {
 			const values = rows[rowIndex];
 			if (!Array.isArray(values) || values.length !== row.cells.length) return;
 			Array.from(row.cells).forEach((cell, cellIndex) => { cell.textContent = String(values[cellIndex] ?? ''); });
@@ -94,9 +101,10 @@
 		const restored = restore(table, key);
 		const toolbar = document.createElement('div');
 		toolbar.className = 'attendee-table-tools';
-		toolbar.innerHTML = '<button type="button" class="primary" data-action="edit">Edit table</button><button type="button" data-action="save" disabled>Save edits</button><button type="button" data-action="download">Download updated HTML</button><button type="button" data-action="reset">Discard edits</button><span role="status" aria-live="polite"></span>';
+		toolbar.innerHTML = '<button type="button" class="primary" data-action="edit">Edit table</button><button type="button" data-action="add">Add row</button><button type="button" data-action="save" disabled>Save edits</button><button type="button" data-action="download">Download updated HTML</button><button type="button" data-action="reset">Discard edits</button><span role="status" aria-live="polite"></span>';
 		table.closest('.attendee-table-wrap').before(toolbar);
 		const editButton = toolbar.querySelector('[data-action="edit"]');
+		const addButton = toolbar.querySelector('[data-action="add"]');
 		const saveButton = toolbar.querySelector('[data-action="save"]');
 		const status = toolbar.querySelector('[role="status"]');
 		let editing = false;
@@ -110,6 +118,27 @@
 			editButton.textContent = editing ? 'Done editing' : 'Edit table';
 			editButton.setAttribute('aria-pressed', String(editing));
 			status.textContent = editing ? 'Editing' : 'Read only';
+		});
+		addButton.addEventListener('click', () => {
+			if (!editing) {
+				editing = true;
+				Array.from(table.tBodies[0].rows).forEach(row => Array.from(row.cells).forEach(cell => { cell.contentEditable = 'true'; }));
+				editButton.textContent = 'Done editing';
+				editButton.setAttribute('aria-pressed', 'true');
+			}
+			const body = table.tBodies[0];
+			const columnCount = table.tHead.rows[0].cells.length;
+			const rosterNumber = id === 'delegate-roster'
+				? Math.max(0, ...Array.from(body.rows, existing => Number.parseInt(existing.cells[0].textContent, 10) || 0)) + 1
+				: null;
+			const row = body.insertRow();
+			for (let columnIndex = 0; columnIndex < columnCount; columnIndex++) {
+				const cell = row.insertCell();
+				cell.textContent = id === 'delegate-roster' && columnIndex === 0 ? String(rosterNumber) : '';
+				cell.contentEditable = 'true';
+			}
+			saveButton.disabled = false;
+			status.textContent = 'Row added; unsaved changes';
 		});
 		table.addEventListener('input', () => {
 			saveButton.disabled = false;
